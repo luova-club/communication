@@ -49,4 +49,4 @@ def handle_audio(data):
             participant['receivers'][participant['senders'].index(sender)].track = audioTrack
 
 if __name__ == '__main__':
-    socketio.run(app)
+    socketio.run(app, host="voice.luova.club", ssl_context=("/etc/letsencrypt/live/voice.luova.club/fullchain.pem", "/etc/letsencrypt/live/voice.luova.club/privkey.pem"))
