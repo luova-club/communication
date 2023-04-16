@@ -44,6 +44,9 @@ let pc;
 let localStream;
 let remoteStreamElement = document.querySelector('#remoteStream');
 let localStreamElement = document.querySelector('#localStream');
+let peers = [];
+let connections = {};
+let streams = {};
 
 let getLocalStream = () => {
   navigator.mediaDevices.getUserMedia({ audio: true })
@@ -61,31 +64,74 @@ let getLocalStream = () => {
     });
 }
 
-let createPeerConnection = () => {
+let createPeerConnection = (id) => {
   try {
-    pc = new RTCPeerConnection(PC_CONFIG);
-    pc.onicecandidate = onIceCandidate;
-    pc.ontrack = onTrack;
+    let pc = new RTCPeerConnection(PC_CONFIG);
+    pc.onicecandidate = (event) => onIceCandidate(event, id);
+    pc.ontrack = (event) => onTrack(event, id);
     pc.addStream(localStream);
-    console.log('PeerConnection created');
+    connections[id] = pc;
+    console.log(`PeerConnection created for ID ${id}`);
   } catch (error) {
-    console.error('PeerConnection failed: ', error);
+    console.error(`PeerConnection creation failed for ID ${id}: `, error);
   }
 };
 
-let sendOffer = () => {
-  console.log('Send offer');
+let getPeerById = (peerId) => {
+  for (let i = 0; i < peers.length; i++) {
+    if (peers[i].peerId === peerId) {
+      return peers[i];
+    }
+  }
+  return null;
+};
+
+let removePeer = (peer) => {
+  let index = peers.indexOf(peer);
+  if (index !== -1) {
+    peers.splice(index, 1);
+  }
+};
+
+let sendToAllPeers = (data) => {
+  for (let i = 0; i < peers.length; i++) {
+    sendToPeer(data, peers[i]);
+  }
+};
+
+let sendToPeer = (data, peer) => {
+  peer.send(JSON.stringify(data));
+};
+
+let sendOffer = (peer) => {
+  console.log(`Send offer to peer ${peer}`);
+  let pc = connections[peer];
   pc.createOffer().then(
-    setAndSendLocalDescription,
-    (error) => { console.error('Send offer failed: ', error); }
+    (description) => {
+      pc.setLocalDescription(description).then(
+        () => {
+          sendMessage({ type: 'offer', data: description, from: currentPeer, to: peer });
+        },
+        (error) => { console.error('Set local description failed: ', error); }
+      );
+    },
+    (error) => { console.error('Create offer failed: ', error); }
   );
 };
 
-let sendAnswer = () => {
-  console.log('Send answer');
+let sendAnswer = (peer) => {
+  console.log(`Send answer to peer ${peer}`);
+  let pc = connections[peer];
   pc.createAnswer().then(
-    setAndSendLocalDescription,
-    (error) => { console.error('Send answer failed: ', error); }
+    (description) => {
+      pc.setLocalDescription(description).then(
+        () => {
+          sendMessage({ type: 'answer', data: description, from: currentPeer, to: peer });
+        },
+        (error) => { console.error('Set local description failed: ', error); }
+      );
+    },
+    (error) => { console.error('Create answer failed: ', error); }
   );
 };
 
@@ -105,27 +151,36 @@ let onIceCandidate = (event) => {
   }
 };
 
-let onTrack = (event) => {
+let onTrack = (event, id) => {
   console.log('Add track');
-  remoteStreamElement.srcObject = event.streams[0];
+
+  // Create a new video element for the remote stream
+  const remoteVideo = document.createElement('video');
+  remoteVideo.autoplay = true;
+  remoteVideo.srcObject = event.streams[0];
+
+  // Append the video element to the HTML document
+  document.body.appendChild(remoteVideo);
 };
 
-let handleSignalingData = (data) => {
+// Dictionary to store RTCPeerConnection objects for each peer
+let peerConnections = {};
+
+let handleSignalingData = (data, id) => {
   switch (data.type) {
     case 'offer':
-      createPeerConnection();
-      pc.setRemoteDescription(new RTCSessionDescription(data));
-      sendAnswer();
+      createPeerConnection(id);
+      connections[id].setRemoteDescription(new RTCSessionDescription(data));
+      sendAnswer(id);
       break;
     case 'answer':
-      pc.setRemoteDescription(new RTCSessionDescription(data));
+      connections[id].setRemoteDescription(new RTCSessionDescription(data));
       break;
     case 'candidate':
-      pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+      connections[id].addIceCandidate(new RTCIceCandidate(data.candidate));
       break;
   }
 };
-
 let toggleMic = () => {
   let track = localStream.getAudioTracks()[0];
   track.enabled = !track.enabled;
