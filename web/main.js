@@ -1,6 +1,6 @@
 // Config variables: change them to point to your own servers
-const SIGNALING_SERVER_URL = 'http://localhost:9999';
-const TURN_SERVER_URL = 'localhost:3478';
+const SIGNALING_SERVER_URL = 'https://voice.luova.club:8443';
+const TURN_SERVER_URL = 'voice.luova.club:3478';
 const TURN_SERVER_USERNAME = 'username';
 const TURN_SERVER_CREDENTIAL = 'credential';
 // WebRTC config: you don't have to change this for the example to work
@@ -46,7 +46,7 @@ let remoteStreamElement = document.querySelector('#remoteStream');
 let localStreamElement = document.querySelector('#localStream');
 
 let getLocalStream = () => {
-  navigator.mediaDevices.getUserMedia({ audio: true, video: true })
+  navigator.mediaDevices.getUserMedia({ audio: true })
     .then((stream) => {
       console.log('Stream found');
       localStream = stream;
