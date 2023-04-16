@@ -5,7 +5,8 @@ let localStream = null;
 document.querySelector('#join').addEventListener('click', async () => {
   const name = document.querySelector('#name').value;
   localStream = await navigator.mediaDevices.getUserMedia(constraints);
-  socket.emit('join', { name });
+  const audioTracks = localStream.getTracks().filter(track => track.kind === 'audio');
+  socket.emit('join', { name, audioTracks });
 });
 
 socket.on('joined', data => {
@@ -13,26 +14,33 @@ socket.on('joined', data => {
   const participantDiv = document.createElement('div');
   participantDiv.innerText = name;
   document.querySelector('#participants').appendChild(participantDiv);
-  localStream.getTracks().forEach(track => {
-    const sender = peerConnection.addTrack(track, localStream);
-  });
+});
+
+socket.on('audio', data => {
+  const { sender, audioTrack } = data;
+  const audioElement = document.createElement('audio');
+  audioElement.srcObject = new MediaStream([audioTrack]);
+  audioElement.play();
+  const participantDiv = document.querySelector(`div[data-sender="${sender}"]`);
+  participantDiv.appendChild(audioElement);
 });
 
 const peerConnection = new RTCPeerConnection();
 
 peerConnection.addEventListener('track', event => {
-  const audioElement = document.createElement('audio');
-  audioElement.srcObject = event.streams[0];
-  document.querySelector('#participants').appendChild(audioElement);
-  const receiver = peerConnection.addTrack(event.track, localStream);
-  socket.emit('audio', { receiver });
+  const audioTrack = event.track;
+  const sender = event.receiver.track;
+  socket.emit('audio', { sender, audioTrack });
 });
 
-socket.on('audio', data => {
-  const { receiver } = data;
-  peerConnection.getSenders().forEach(sender => {
-    if (sender.track.kind === 'audio') {
-      sender.replaceTrack(receiver);
-    }
+socket.on('offer', offer => {
+  peerConnection.setRemoteDescription(offer);
+  peerConnection.createAnswer().then(answer => {
+    peerConnection.setLocalDescription(answer);
+    socket.emit('answer', answer);
   });
+});
+
+socket.on('answer', answer => {
+  peerConnection.setRemoteDescription(answer);
 });
