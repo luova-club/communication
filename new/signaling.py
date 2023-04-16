@@ -9,6 +9,11 @@ socketio = SocketIO(app, cors_allowed_origins='*')
 def index():
     return render_template("index.html")
 
+@app.route("/main.js")
+def main():
+    with open("main.js", "r") as f:
+        return f.read()
+
 @socketio.on('connect')
 def handle_connect():
     print('Client connected')
